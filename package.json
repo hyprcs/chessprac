@@ -1,0 +1,30 @@
+{
+  "name": "chessprac",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Find the early-game positions where you keep going wrong, then drill them.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "openings": "tsx scripts/build-openings.ts",
+    "report": "tsx scripts/report.ts"
+  },
+  "dependencies": {
+    "chess.js": "1.4.0",
+    "chessground": "9.2.1",
+    "idb": "8.0.4",
+    "stockfish": "19.0.1",
+    "ts-fsrs": "5.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
+  }
+}
