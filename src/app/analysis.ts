@@ -100,7 +100,8 @@ export async function startAnalysis(): Promise<void> {
     for (const [i, g] of pending.entries()) {
       const need = new Set<string>();
       for (const j of enginePositions(g, maxPly)) {
-        if (usable(evals.get(j.key), depth)) continue;
+        // A position can come up twice in one game (a repetition); wait on it once.
+        if (need.has(j.key) || usable(evals.get(j.key), depth)) continue;
         need.add(j.key);
         if (!waiting.has(j.key)) {
           waiting.set(j.key, []);
