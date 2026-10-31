@@ -58,6 +58,8 @@ export interface Account {
 }
 
 export interface SyncState {
+  /** First import only: take games from this time on (ms). Unset means all history. */
+  from?: number;
   /** chess.com: last monthly archive fully or partly fetched, "YYYY/MM". */
   lastArchive?: string;
   /** Lichess: createdAt of the newest game imported, ms. */
@@ -71,9 +73,25 @@ export interface Settings {
   /** Only look at my moves within this many plies from the start (40 = first 20 moves). */
   maxPly: number;
   depth: number;
+  /** Background engine workers; 0 means pick from the CPU count. */
+  workers: number;
+  /** New positions the recall queue introduces per day. */
+  newPerDay: number;
+  /** After a right answer, how many more of my moves the drill plays on. */
+  lineLength: number;
+  /** In a drill, a move this close to the best one also counts as right. */
+  altToleranceCp: number;
 }
 
-export const DEFAULT_SETTINGS: Settings = { thresholdCp: 80, maxPly: 40, depth: 16 };
+export const DEFAULT_SETTINGS: Settings = {
+  thresholdCp: 80,
+  maxPly: 40,
+  depth: 16,
+  workers: 0,
+  newPerDay: 10,
+  lineLength: 3,
+  altToleranceCp: 30,
+};
 
 export interface Profile {
   id: string;

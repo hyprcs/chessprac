@@ -18,22 +18,24 @@ const lichessEval = (game: GameRecord, ply: number): number | null =>
   ply < 0 ? null : (game.lichessEvals?.[ply] ?? null);
 
 /**
- * Positions the engine still has to look at for these games, deduplicated.
- * Games Lichess already analysed only need the odd gap filled (e.g. the
- * starting position, which Lichess doesn't score).
+ * Positions the engine must score for one game: before and after each of my
+ * moves. Games Lichess already analysed only need the odd gap filled (e.g.
+ * the starting position, which Lichess doesn't score).
  */
+export function enginePositions(game: GameRecord, maxPly: number): EvalJob[] {
+  const out: EvalJob[] = [];
+  for (const p of myPlies(game, maxPly)) {
+    if (lichessEval(game, p.ply - 1) === null) out.push({ key: positionKey(p.fenBefore), fen: p.fenBefore });
+    if (lichessEval(game, p.ply) === null) out.push({ key: positionKey(p.fenAfter), fen: p.fenAfter });
+  }
+  return out;
+}
+
+/** Positions the engine still has to look at for these games, deduplicated, in game order. */
 export function engineJobs(games: GameRecord[], maxPly: number, depth: number, lookup: EvalLookup): EvalJob[] {
   const jobs = new Map<string, EvalJob>();
-  const need = (fen: string) => {
-    const key = positionKey(fen);
-    if (!jobs.has(key) && !usable(lookup(key), depth)) jobs.set(key, { key, fen });
-  };
-  for (const game of games) {
-    for (const p of myPlies(game, maxPly)) {
-      if (lichessEval(game, p.ply - 1) === null) need(p.fenBefore);
-      if (lichessEval(game, p.ply) === null) need(p.fenAfter);
-    }
-  }
+  for (const game of games)
+    for (const j of enginePositions(game, maxPly)) if (!jobs.has(j.key) && !usable(lookup(j.key), depth)) jobs.set(j.key, j);
   return [...jobs.values()];
 }
 

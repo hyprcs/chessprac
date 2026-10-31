@@ -14,9 +14,11 @@
     "report": "tsx scripts/report.ts"
   },
   "dependencies": {
+    "@preact/signals": "2.11.3",
     "chess.js": "1.4.0",
     "chessground": "9.2.1",
     "idb": "8.0.4",
+    "preact": "11.0.1",
     "stockfish": "19.0.1",
     "ts-fsrs": "5.4.2"
   },
