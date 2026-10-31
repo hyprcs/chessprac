@@ -436,6 +436,9 @@ kbd {
 .drill-panel p {
   margin: 0;
 }
+.drill-panel .progress {
+  flex: none;
+}
 .drill-head {
   display: flex;
   justify-content: space-between;

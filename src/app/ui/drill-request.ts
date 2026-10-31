@@ -10,6 +10,8 @@ function readTab(): Tab {
   return ['mistakes', 'openings', 'drill', 'profile'].includes(t) ? t : 'mistakes';
 }
 
+window.addEventListener('hashchange', () => (tab.value = readTab()));
+
 export function go(t: Tab) {
   tab.value = t;
   history.replaceState(null, '', `#${t}`);

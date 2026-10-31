@@ -12,6 +12,7 @@ import { classifyOpening } from '../../core/openings';
 import { formatLine } from '../../core/position';
 import { cards, getReplyIndex, profile, ranked, saveCard, settings } from '../state';
 import { applyUci, judge, opponentReply, shuffle, type Judgement, type Reply } from '../drill';
+import { drillEngine } from '../engine';
 import { Board, arrow, dests, lastMoveOf } from './Board';
 import { FilterBar } from './Filters';
 import { drillRequest } from './drill-request';
@@ -119,7 +120,9 @@ export function DrillView({ active }: { active: boolean }) {
       startedAt: Date.now(),
       finishedAt: null,
     };
-    void getReplyIndex(); // build it while the first position is on screen
+    // Warm up while the first position is on screen.
+    void getReplyIndex();
+    void drillEngine();
     show(0);
   }
 
