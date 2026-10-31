@@ -21,8 +21,9 @@ export function speedOf(tc: TimeControl): Speed {
   return SPEED_BANDS.find((b) => est < b.below)!.speed;
 }
 
-/** chess.com "180", "180+2" or daily "1/86400". */
+/** chess.com "180", "180+2", daily "1/86400", or "-" for an untimed daily game. */
 export function parseChesscomTimeControl(s: string): TimeControl | null {
+  if (s === '-') return { kind: 'daily', secondsPerMove: 0 };
   const daily = /^1\/(\d+)$/.exec(s);
   if (daily) return { kind: 'daily', secondsPerMove: Number(daily[1]) };
   const live = /^(\d+)(?:\+(\d+))?$/.exec(s);
@@ -31,7 +32,7 @@ export function parseChesscomTimeControl(s: string): TimeControl | null {
 }
 
 export function formatTimeControl(tc: TimeControl): string {
-  if (tc.kind === 'daily') return `${Math.round(tc.secondsPerMove / 86400)} day/move`;
+  if (tc.kind === 'daily') return tc.secondsPerMove ? `${Math.round(tc.secondsPerMove / 86400)}d/move` : 'untimed';
   const base = tc.base % 60 === 0 ? String(tc.base / 60) : (tc.base / 60).toFixed(1).replace(/\.0$/, '');
   return `${base}+${tc.inc}`;
 }

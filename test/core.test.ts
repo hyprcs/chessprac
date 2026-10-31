@@ -53,6 +53,7 @@ describe('speed buckets (base + 40 x increment)', () => {
     expect(s('600')).toBe('rapid');
     expect(s('1800')).toBe('classical');
     expect(s('1/86400')).toBe('correspondence');
+    expect(s('-')).toBe('correspondence');
   });
 });
 
