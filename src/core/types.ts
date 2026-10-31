@@ -40,6 +40,10 @@ export interface GameRecord {
   lichessEvals?: (number | null)[];
   /** Lichess's suggested better move (UCI) for a ply, where it gave one. */
   lichessBest?: (string | null)[];
+  /** Seconds left on the mover's clock after each ply, where the site recorded it. */
+  clocks?: (number | null)[];
+  /** The site's own accuracy score (chess.com CAPS or Lichess accuracy), when it computed one. Not comparable across sites. */
+  accuracy?: { mine: number | null; opp: number | null };
 }
 
 export interface Opening {
@@ -65,6 +69,8 @@ export interface SyncState {
   /** Lichess: createdAt of the newest game imported, ms. */
   lastCreatedAt?: number;
   lastSyncAt?: number;
+  /** IMPORT_SCHEMA the stored games were fetched with; older ones are fetched again once to fill in new fields. */
+  schema?: number;
 }
 
 export interface Settings {
@@ -106,6 +112,18 @@ export interface EvalEntry {
   cp: number;
   best: string | null;
   depth: number;
+  /**
+   * The engine's main line (UCI). Missing on evaluations saved before lines were kept. A later refutation
+   * search adds its line here but keeps `cp` and `best`, so in a near-tie the line can start with another move.
+   */
+  pv?: string[];
+  /** Win/draw/loss chances per mille, side to move. */
+  wdl?: [number, number, number];
+  /**
+   * The runner-up move from a two-line (MultiPV) search, so an "only good move" can be told apart.
+   * Null when there was no second legal move; missing when only one line was searched.
+   */
+  second?: { cp: number; move: string } | null;
 }
 
 /** One of my moves, scored. */
@@ -128,5 +146,7 @@ export interface GameAnalysis {
   gameId: string;
   depth: number;
   maxPly: number;
+  /** ANALYSIS_VERSION it was computed with; missing means 1. A newer version re-derives it from the cached evals. */
+  version?: number;
   moves: MoveEval[];
 }

@@ -13,7 +13,7 @@ import { DEFAULT_SETTINGS } from '../src/core/types';
 import { PROFILE_FORMAT, PROFILE_VERSION, parseProfileFile, type ProfileFile } from '../src/core/profile-file';
 import { SITE_NAMES, syncAccount } from '../src/core/import/sync';
 import type { SkipReason } from '../src/core/import/common';
-import { analyseGame, bestMoveJobs, engineJobs } from '../src/core/analysis/analyse';
+import { analyseGame, bestMoveJobs, engineJobs, mergeEval, refutationJobs } from '../src/core/analysis/analyse';
 import type { EvalJob } from '../src/core/analysis/engine';
 import { rankMistakes, type MistakeGroup } from '../src/core/mistakes';
 import { formatLine, moveNumberLabel } from '../src/core/position';
@@ -62,6 +62,8 @@ function loadFile(): ProfileFile {
     analyses: [],
     evals: {},
     cards: [],
+    attempts: [],
+    sessions: [],
   };
 }
 
@@ -81,6 +83,7 @@ async function main() {
   const lookup = (k: string) => evals.get(k);
   const save = (analyses?: GameAnalysis[]) => {
     mkdirSync('.cache', { recursive: true });
+    file.version = PROFILE_VERSION;
     file.exportedAt = Date.now();
     file.games = [...games.values()];
     file.evals = Object.fromEntries(evals);
@@ -125,7 +128,7 @@ async function main() {
     const t0 = Date.now();
     let lastPct = -1;
     await pool.evaluateAll(jobs, depth, (job, ev, done, total) => {
-      evals.set(job.key, ev);
+      evals.set(job.key, mergeEval(evals.get(job.key), ev, depth));
       const pct = Math.floor((done / total) * 100);
       if (pct !== lastPct && pct % 5 === 0) {
         lastPct = pct;
@@ -141,6 +144,7 @@ async function main() {
     inWindow.map((g) => analyseGame(g, maxPly, depth, lookup)).filter((a): a is GameAnalysis => a !== null);
   let analyses = analyse();
   await runJobs(bestMoveJobs(analyses, threshold, lookup), 'best moves');
+  await runJobs(refutationJobs(analyses, threshold, depth, lookup), 'refutations');
   analyses = analyse();
   pool.terminate();
   save(analyses);

@@ -7,6 +7,7 @@ import { findAccount } from '../core/import/accounts';
 import { addGameReplies, type ReplyIndex } from '../core/replies';
 import { PROFILE_FORMAT, PROFILE_VERSION, parseProfileFile, type ProfileFile } from '../core/profile-file';
 import { reviveDrillCard, type DrillCard } from '../core/srs';
+import type { DrillAttempt, DrillSession } from '../core/drill-log';
 import * as store from './db';
 
 export const profiles = signal<Profile[]>([]);
@@ -109,7 +110,7 @@ async function saveProfile(p: Profile): Promise<void> {
     : [...profiles.value, p];
 }
 
-const newId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
+export const newId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
 
 export async function createProfile(name: string): Promise<Profile> {
   const p: Profile = { id: newId(), name: name.trim() || 'Me', accounts: [], settings: { ...DEFAULT_SETTINGS }, createdAt: Date.now() };
@@ -246,6 +247,11 @@ export async function saveCard(c: DrillCard): Promise<void> {
   cards.value = new Map(cards.value).set(c.key, c);
 }
 
+// ---- Drill log: written as it happens; a failed write must never interrupt a drill ----
+
+export const logAttempt = (a: DrillAttempt) => store.putAttempts([a]).catch((e) => console.error('chessprac: drill attempt not saved', e));
+export const logSession = (s: DrillSession) => store.putSessions([s]).catch((e) => console.error('chessprac: drill session not saved', e));
+
 // ---- Export / import ----
 
 export async function exportProfile(): Promise<{ name: string; blob: Blob }> {
@@ -259,6 +265,8 @@ export async function exportProfile(): Promise<{ name: string; blob: Blob }> {
     analyses: [...analyses.value.values()],
     evals: Object.fromEntries(evals),
     cards: [...cards.value.values()],
+    attempts: await store.attemptsFor(p.id),
+    sessions: await store.sessionsFor(p.id),
   };
   const name = `chessprac-${p.name.replace(/[^\w-]+/g, '_')}-${new Date().toISOString().slice(0, 10)}.json`;
   return { name, blob: new Blob([JSON.stringify(file)], { type: 'application/json' }) };
@@ -275,6 +283,8 @@ export async function importProfile(text: string): Promise<Profile> {
   for (let i = 0; i < better.length; i += 5000) await store.putEvals(better.slice(i, i + 5000));
   for (const [k, e] of better) evals.set(k, e);
   await store.putCards((file.cards as DrillCard[]).map((c) => reviveDrillCard({ ...c, profileId: p.id })));
+  await store.putAttempts(file.attempts.map((a) => ({ ...a, profileId: p.id })));
+  await store.putSessions(file.sessions.map((s) => ({ ...s, profileId: p.id })));
   await saveProfile(p);
   evalsVersion.value++;
   await selectProfile(p.id);

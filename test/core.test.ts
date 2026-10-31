@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { Chess } from 'chess.js';
-import { pgnHeaders, pgnMoves } from '../src/core/import/pgn';
+import { pgnHeaders, pgnMainline, pgnMoves } from '../src/core/import/pgn';
 import { positionKey, replay, formatLine } from '../src/core/position';
 import { speedOf, parseChesscomTimeControl } from '../src/core/timecontrol';
 import { classifyOpening } from '../src/core/openings';
 import { normaliseChesscom, type CcGame } from '../src/core/import/chesscom';
 import { normaliseLichess, type LiGame } from '../src/core/import/lichess';
-import { analyseGame, engineJobs } from '../src/core/analysis/analyse';
-import { Engine, type UciChannel } from '../src/core/analysis/engine';
+import { ANALYSIS_VERSION, analyseGame, engineJobs, mergeEval, refutationJobs } from '../src/core/analysis/analyse';
+import { Engine, parseInfo, type UciChannel } from '../src/core/analysis/engine';
 import { rankMistakes } from '../src/core/mistakes';
-import type { EvalEntry, GameRecord } from '../src/core/types';
+import type { EvalEntry, GameAnalysis, GameRecord } from '../src/core/types';
+import { parseProfileFile } from '../src/core/profile-file';
 
 const keyAfter = (sans: string[]) => {
   const c = new Chess();
@@ -26,6 +27,10 @@ describe('pgn', () => {
   it('reads mainline SAN and headers', () => {
     expect(pgnMoves(pgn)).toEqual(['e4', 'c6', 'd4', 'd5', 'e5']);
     expect(pgnHeaders(pgn).ECOUrl).toContain('Caro-Kann');
+  });
+  it('reads clocks after each mainline move, ignoring variations', () => {
+    expect(pgnMainline(pgn).clocks).toEqual([179.9, 179, null, null, null]);
+    expect(pgnMainline('1. e4 { [%clk 1:02:03] } (1. d4 {[%clk 0:00:01]}) 1... e5 {[%clk 0:59:58.5][%timestamp 3]} *').clocks).toEqual([3723, 3598.5]);
   });
 });
 
@@ -88,6 +93,14 @@ describe('chess.com normalising', () => {
     expect(g.myRating).toBe(1250);
     expect(g.speed).toBe('blitz');
     expect(g.moves).toEqual(['e4', 'c6', 'd4', 'd5', 'e5']);
+    expect(g.clocks).toBeUndefined();
+    expect(g.accuracy).toBeUndefined();
+  });
+  it('keeps clocks and accuracy from my side', () => {
+    const pgn = '[Event "x"]\n\n1. e4 {[%clk 0:02:59.9]} 1... c6 {[%clk 0:02:58.1]} 2. d4 {[%clk 0:02:57]} *';
+    const g = normaliseChesscom({ ...ccBase, pgn, accuracies: { white: 81.2, black: 74.5 } }, 'hypriva') as GameRecord;
+    expect(g.clocks).toEqual([179.9, 178.1, 177]);
+    expect(g.accuracy).toEqual({ mine: 74.5, opp: 81.2 });
   });
   it('skips variants and custom starting positions', () => {
     expect(normaliseChesscom({ ...ccBase, rules: 'chess960' }, 'hypriva')).toBe('variant');
@@ -121,6 +134,14 @@ describe('Lichess normalising', () => {
     expect(g.lichessBest).toEqual([null, null, 'g1f3']);
     expect(g.url).toBe('https://lichess.org/abcd1234');
   });
+  it('turns centisecond clocks into seconds per ply, dropping the trailing entry', () => {
+    const g = normaliseLichess(
+      { ...liBase, clocks: [30003, 30003, 29787, 29500], players: { ...liBase.players, white: { ...liBase.players.white, analysis: { accuracy: 88 } } } },
+      'hypriva',
+    ) as GameRecord;
+    expect(g.clocks).toEqual([300.03, 300.03, 297.87]);
+    expect(g.accuracy).toEqual({ mine: 88, opp: null });
+  });
   it('skips variants, custom positions and aborted games', () => {
     expect(normaliseLichess({ ...liBase, variant: 'chess960' }, 'hypriva')).toBe('variant');
     expect(normaliseLichess({ ...liBase, variant: 'fromPosition' }, 'hypriva')).toBe('custom position');
@@ -148,6 +169,7 @@ describe('analysis', () => {
     ]);
     const a = analyseGame(g, 40, 16, (k) => evals.get(k))!;
     expect(a.moves.map((m) => [m.san, m.loss])).toEqual([['c6', 0], ['c5', 120]]);
+    expect(a.version).toBe(ANALYSIS_VERSION);
   });
 
   it('returns null until every position is evaluated, and asks only for what is missing', () => {
@@ -194,6 +216,87 @@ describe('engine wrapper', () => {
     };
     const e = new Engine(ch);
     await e.init();
-    expect(await e.evaluate('startpos', 16)).toEqual({ cp: 35, best: 'd2d4', depth: 16 });
+    expect(await e.evaluate('startpos', 16)).toEqual({ cp: 35, best: 'd2d4', depth: 16, pv: ['d2d4', 'd7d5', 'c2c4'] });
+  });
+
+  it('keeps win/draw/loss and the runner-up line when asked for two lines', async () => {
+    let listener: (l: string) => void = () => {};
+    const sent: string[] = [];
+    let lines: string[] = [];
+    const ch: UciChannel = {
+      onLine: (cb) => (listener = cb),
+      terminate: () => {},
+      send: (cmd) => {
+        sent.push(cmd);
+        const reply = (ls: string[]) => setTimeout(() => ls.forEach((l) => listener(l)));
+        if (cmd === 'uci') reply(['uciok']);
+        if (cmd === 'isready') reply(['readyok']);
+        if (cmd.startsWith('go')) reply(lines);
+      },
+    };
+    const e = new Engine(ch);
+    await e.init();
+    expect(sent).toContain('setoption name UCI_ShowWDL value true');
+    lines = [
+      'info depth 12 seldepth 19 multipv 1 score cp 411 wdl 980 18 2 nodes 1 pv f3e5 f7g8 d1g4',
+      'info depth 12 seldepth 21 multipv 2 score cp -118 wdl 10 300 690 nodes 1 pv f1c4 g4e6',
+      'bestmove f3e5 ponder f7g8',
+    ];
+    expect(await e.evaluate('x', 12, 2)).toEqual({
+      cp: 411, best: 'f3e5', depth: 12, pv: ['f3e5', 'f7g8', 'd1g4'], wdl: [980, 18, 2], second: { cp: -118, move: 'f1c4' },
+    });
+    // Only one legal move: no second line, recorded as null so it isn't searched again.
+    lines = ['info depth 12 multipv 1 score cp 50 pv e1f1', 'bestmove e1f1'];
+    expect((await e.evaluate('y', 12, 2)).second).toBeNull();
+    // Back to one line, and the option is set back.
+    lines = ['info depth 12 multipv 1 score mate 3 pv a1a8', 'bestmove a1a8'];
+    expect(await e.evaluate('z', 12)).toEqual({ cp: 1000, best: 'a1a8', depth: 12, pv: ['a1a8'] });
+    expect(sent.filter((c) => c.startsWith('setoption name MultiPV'))).toEqual(['setoption name MultiPV value 2', 'setoption name MultiPV value 1']);
+  });
+
+  it('ignores bounds, strings and lines without a score', () => {
+    expect(parseInfo('info depth 16 multipv 1 score cp 90 lowerbound wdl 1 2 3 pv d2d4')).toBeNull();
+    expect(parseInfo('info string NNUE evaluation using nn-xyz.nnue')).toBeNull();
+    expect(parseInfo('info depth 16 currmove e2e4 currmovenumber 1')).toBeNull();
+    expect(parseInfo('info depth 0 score mate 0')).toEqual({ depth: 0, multipv: 1, cp: -1000, wdl: undefined, pv: undefined });
+  });
+});
+
+describe('refutations', () => {
+  it('asks for a two-line search after each flagged move, once', () => {
+    const g = game(['e4', 'c6', 'd4', 'c5'], 'black');
+    const plies = replay(g.moves);
+    const move = (i: number, loss: number) => ({
+      ply: i, key: positionKey(plies[i].fenBefore), fen: plies[i].fenBefore, san: plies[i].san, uci: plies[i].uci,
+      before: 0, after: -loss, loss, best: null, source: 'engine' as const,
+    });
+    const a: GameAnalysis = { gameId: g.id, depth: 16, maxPly: 40, moves: [move(1, 10), move(3, 150)] };
+    const after = positionKey(plies[3].fenAfter);
+    expect(refutationJobs([a, a], 80, 16, () => undefined)).toEqual([{ key: after, fen: plies[3].fenAfter, multiPv: 2 }]);
+    const searched: EvalEntry = { cp: 180, best: 'd4c5', depth: 16, pv: ['d4c5'], second: { cp: 90, move: 'g1f3' } };
+    expect(refutationJobs([a], 80, 16, (k) => (k === after ? searched : undefined))).toEqual([]);
+    // A one-line evaluation of the same position isn't enough.
+    expect(refutationJobs([a], 80, 16, () => ({ cp: 180, best: 'd4c5', depth: 16 }))).toHaveLength(1);
+  });
+
+  it('adds the line to an existing score without changing it', () => {
+    const old: EvalEntry = { cp: 180, best: 'd4c5', depth: 16 };
+    const fresh: EvalEntry = { cp: 205, best: 'd4c5', depth: 16, pv: ['d4c5', 'e7e6'], wdl: [900, 90, 10], second: { cp: 90, move: 'g1f3' } };
+    expect(mergeEval(old, fresh, 16)).toEqual({ ...fresh, cp: 180 });
+    // Nothing usable before, or not a refutation search: the fresh result as it is.
+    expect(mergeEval(undefined, fresh, 16)).toBe(fresh);
+    expect(mergeEval({ ...old, depth: 10 }, fresh, 16)).toBe(fresh);
+    expect(mergeEval(old, { cp: 205, best: 'd4c5', depth: 16, pv: ['d4c5'] }, 16).cp).toBe(205);
+  });
+});
+
+describe('profile files', () => {
+  it('reads version 1 files with an empty drill log', () => {
+    const f = parseProfileFile(JSON.stringify({ format: 'chessprac-profile', version: 1, exportedAt: 0, profile: {}, games: [], analyses: [], evals: {}, cards: [] }));
+    expect(f.attempts).toEqual([]);
+    expect(f.sessions).toEqual([]);
+  });
+  it('refuses files from a newer app', () => {
+    expect(() => parseProfileFile(JSON.stringify({ format: 'chessprac-profile', version: 99 }))).toThrow(/newer/);
   });
 });

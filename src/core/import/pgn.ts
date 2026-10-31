@@ -5,21 +5,41 @@ export function pgnHeaders(pgn: string): Record<string, string> {
   return out;
 }
 
-/**
- * SAN tokens of a single-game PGN's mainline. Much faster than loading the
- * PGN into chess.js; legality is checked later when the moves are replayed.
- */
-export function pgnMoves(pgn: string): string[] {
-  let text = pgn.replace(/^\[.*\]\s*$/gm, '');
-  text = text.replace(/\{[^}]*\}/g, ' ').replace(/;[^\n]*/g, ' ');
-  // Strip variations, innermost first.
-  let prev;
-  do {
-    prev = text;
-    text = text.replace(/\([^()]*\)/g, ' ');
-  } while (text !== prev);
-  return text
-    .split(/\s+/)
-    .map((t) => t.replace(/^\d+\.+/, ''))
-    .filter((t) => t && !/^(\$\d+|1-0|0-1|1\/2-1\/2|\*)$/.test(t));
+/** "[%clk 0:02:58.7]" in a comment -> 178.7 seconds. */
+function clockOf(comment: string): number | null {
+  const m = /\[%clk\s+(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)\]/.exec(comment);
+  return m ? Number(m[1] ?? 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) : null;
 }
+
+/**
+ * SAN tokens of a single-game PGN's mainline, with the seconds left after
+ * each move from its [%clk] comment (null where there is none). Much faster
+ * than loading the PGN into chess.js; legality is checked later when the
+ * moves are replayed.
+ */
+export function pgnMainline(pgn: string): { moves: string[]; clocks: (number | null)[] } {
+  const text = pgn.replace(/^\[.*\]\s*$/gm, '');
+  const moves: string[] = [];
+  const clocks: (number | null)[] = [];
+  let depth = 0; // inside variations
+  // Comments first, so brackets inside them don't count as variations.
+  for (const m of text.matchAll(/\{([^}]*)\}|;[^\n]*|\(|\)|[^\s{}();]+/g)) {
+    const tok = m[0];
+    if (tok === '(') depth++;
+    else if (tok === ')') depth = Math.max(0, depth - 1);
+    else if (depth > 0 || tok.startsWith(';')) continue;
+    else if (m[1] !== undefined) {
+      const c = clockOf(m[1]);
+      if (c !== null && moves.length) clocks[moves.length - 1] = c;
+    } else {
+      const san = tok.replace(/^\d+\.+/, '');
+      if (san && !/^(\$\d+|1-0|0-1|1\/2-1\/2|\*)$/.test(san)) {
+        moves.push(san);
+        clocks.push(null);
+      }
+    }
+  }
+  return { moves, clocks };
+}
+
+export const pgnMoves = (pgn: string): string[] => pgnMainline(pgn).moves;

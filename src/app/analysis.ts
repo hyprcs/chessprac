@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals';
 import type { EvalEntry, GameAnalysis, GameRecord } from '../core/types';
-import { analyseGame, bestMoveJobs, enginePositions, usable } from '../core/analysis/analyse';
+import { ANALYSIS_VERSION, analyseGame, bestMoveJobs, enginePositions, mergeEval, refutationJobs, usable } from '../core/analysis/analyse';
 import type { EnginePool, EvalJob } from '../core/analysis/engine';
 import * as store from './db';
 import { analyses, currentId, evals, evalsVersion, games, lookup, onProfileLoaded, settings } from './state';
@@ -34,7 +34,7 @@ let rerun = false;
 const yieldToUi = () => new Promise((r) => setTimeout(r));
 
 function needsAnalysis(a: GameAnalysis | undefined, depth: number, maxPly: number) {
-  return !a || a.depth < depth || a.maxPly !== maxPly;
+  return !a || a.depth < depth || a.maxPly !== maxPly || (a.version ?? 1) < ANALYSIS_VERSION;
 }
 
 export function pendingGames(): number {
@@ -158,6 +158,27 @@ export async function startAnalysis(): Promise<void> {
           evals.set(job.key, ev);
           evalBuffer.push([job.key, ev]);
           set({ done });
+        }, abort);
+        await flush();
+      }
+    }
+
+    // How each flagged move is punished: the opponent's full best line and runner-up reply.
+    if (!abort.aborted && stillCurrent()) {
+      const lines = refutationJobs([...analyses.value.values()], thresholdCp, depth, lookup);
+      if (lines.length) {
+        set({ phase: 'Finding refutations', done: 0, total: lines.length, startedAt: Date.now() });
+        pool ??= await browserPool(Math.min(workers, lines.length));
+        let lastFlush = Date.now();
+        await pool.evaluateAll(lines, depth, (job, fresh, done) => {
+          const ev = mergeEval(evals.get(job.key), fresh, depth);
+          evals.set(job.key, ev);
+          evalBuffer.push([job.key, ev]);
+          set({ done });
+          if (Date.now() - lastFlush > 2000) {
+            lastFlush = Date.now();
+            void flush();
+          }
         }, abort);
         await flush();
       }

@@ -7,7 +7,7 @@ A static site (Vite + TypeScript + Preact). Everything runs in your browser: gam
 ## Using it
 
 1. **Create a profile and link an account.** Use chess.com or Lichess, and choose how far back to import. Link the other site, or more accounts, later; their games merge into the same profile.
-2. **Analysis runs in the background.** A progress bar shows how far it has got. Every position where you were to move in the first 20 moves is scored, and a move is flagged when it loses more than 0.8 pawns against the best move (adjustable). It saves as it goes, so closing the tab only pauses it. Games Lichess has already analysed reuse Lichess's evals.
+2. **Analysis runs in the background.** A progress bar shows how far it has got. Every position where you were to move in the first 20 moves is scored, and a move is flagged when it loses more than 0.8 pawns against the best move (adjustable). It saves as it goes, so closing the tab only pauses it. Games Lichess has already analysed reuse Lichess's evals. For each flagged move it then searches the position after it for two lines: the opponent's best line (how the move is punished) and the runner-up reply (whether that punishment was the only good move). Imports keep each move's clock time and the site's accuracy score where it has one; accounts imported before this was added are fetched again once on the next sync.
 3. **Mistakes.** Positions are grouped by FEN, so the same error on either site, or after a different move order, counts once. They're ranked by times wrong × average loss. Filter by site, colour and time control.
 4. **Openings.** Your score per opening and variation, named the same way for both sites.
 5. **Drill.**
@@ -15,7 +15,8 @@ A static site (Vite + TypeScript + Preact). Everything runs in your browser: gam
    - *Speed run:* the whole set, as fast as you can. It doesn't touch the schedule.
    - *After a right answer:* the drill plays the reply your opponents most often chose (falling back to the engine) and continues for a few moves.
    - *After a wrong answer:* it shows the best move, the eval drop, and links to the games where you went wrong.
-6. **Export your profile** from the Profile tab now and then. If browser data is cleared, importing the file restores everything.
+   - Every try in every mode is logged with its move and answer time, along with each session, so speed-run cycles and review history can be studied later.
+6. **Export your profile** from the Profile tab now and then. If browser data is cleared, importing the file restores everything, drill history included.
 
 ## Development
 

@@ -12,6 +12,8 @@ interface LiPlayer {
   user?: { name: string; id: string };
   aiLevel?: number;
   rating?: number;
+  /** With `accuracy=true`, on games Lichess has analysed. */
+  analysis?: { accuracy?: number };
 }
 
 interface LiAnalysisEntry {
@@ -36,6 +38,8 @@ export interface LiGame {
   daysPerTurn?: number;
   initialFen?: string;
   analysis?: LiAnalysisEntry[];
+  /** Centiseconds left after each ply, plus one trailing entry for the final position. */
+  clocks?: number[];
 }
 
 /** Statuses for games that never really happened. */
@@ -54,7 +58,8 @@ export const syncLichess: Importer = async (username, state, cb) => {
     pgnInJson: 'false',
     opening: 'true',
     evals: 'true',
-    clocks: 'false',
+    clocks: 'true',
+    accuracy: 'true',
     finished: 'true',
     sort: 'dateAsc',
   });
@@ -128,5 +133,9 @@ export function normaliseLichess(g: LiGame, account: string): GameRecord | SkipR
     );
     game.lichessBest = g.analysis.map((a) => a.best ?? null);
   }
+  if (g.clocks?.length) game.clocks = g.clocks.slice(0, moves.length).map((cs) => cs / 100);
+  const mine = me.analysis?.accuracy ?? null;
+  const theirs = opp.analysis?.accuracy ?? null;
+  if (mine !== null || theirs !== null) game.accuracy = { mine, opp: theirs };
   return game;
 }

@@ -7,10 +7,11 @@ import type { DrawShape } from 'chessground/draw';
 import type { Key } from 'chessground/types';
 import type { MistakeGroup } from '../../core/mistakes';
 import { drillSet, dueQueue, SET_LABELS, type SetKind } from '../../core/drill-set';
-import { newDrillCard, review } from '../../core/srs';
+import { gradeFor, newDrillCard, review } from '../../core/srs';
+import type { DrillMode, DrillSession } from '../../core/drill-log';
 import { classifyOpening } from '../../core/openings';
 import { formatLine } from '../../core/position';
-import { cards, getReplyIndex, profile, ranked, saveCard, settings } from '../state';
+import { cards, getReplyIndex, logAttempt, logSession, newId, profile, ranked, saveCard, settings } from '../state';
 import { applyUci, judge, opponentReply, shuffle, type Judgement, type Reply } from '../drill';
 import { drillEngine } from '../engine';
 import { Board, arrow, dests, lastMoveOf } from './Board';
@@ -18,7 +19,7 @@ import { FilterBar } from './Filters';
 import { drillRequest } from './drill-request';
 import { day, duration, gameLabel, pawns, percent, plural, signedPawns } from './format';
 
-type Mode = 'recall' | 'speed' | 'practice';
+type Mode = DrillMode;
 
 interface Item {
   group: MistakeGroup;
@@ -26,6 +27,8 @@ interface Item {
 }
 
 interface Session {
+  /** The saved record of this run; its attempts point at its id. */
+  log: DrillSession;
   mode: Mode;
   items: Item[];
   index: number;
@@ -103,21 +106,39 @@ export function DrillView({ active }: { active: boolean }) {
     s.index = index;
     if (index >= s.items.length) {
       s.finishedAt = Date.now();
+      s.log = { ...s.log, finishedAt: s.finishedAt };
+      void logSession(s.log);
       setTurn(null);
       return;
     }
     setTurn({ fen: s.items[index].group.fen, step: 0, phase: 'move', shapes: [], log: [], shownAt: Date.now() });
   }
 
-  function begin(mode: Mode, items: Item[]) {
+  function begin(mode: Mode, items: Item[], from: DrillSession['set'], shuffled = false) {
     if (!items.length) return;
+    const continueLine = mode === 'speed' ? speedLine : true;
+    const startedAt = Date.now();
+    const log: DrillSession = {
+      id: newId(),
+      profileId: profile.value!.id,
+      mode,
+      set: from,
+      size: items.length,
+      shuffled,
+      playOn: continueLine,
+      startedAt,
+      finishedAt: null,
+      endedEarly: false,
+    };
+    void logSession(log);
     S.current = {
+      log,
       mode,
       items: [...items],
       index: 0,
-      continueLine: mode === 'speed' ? speedLine : true,
+      continueLine,
       firstTry: new Map(),
-      startedAt: Date.now(),
+      startedAt,
       finishedAt: null,
     };
     // Warm up while the first position is on screen.
@@ -129,6 +150,7 @@ export function DrillView({ active }: { active: boolean }) {
   const next = () => S.current && show(S.current.index + 1);
   const stop = () => {
     if (S.current && !S.current.finishedAt) {
+      if (S.current.index < S.current.items.length) S.current.log = { ...S.current.log, endedEarly: true };
       S.current.items = S.current.items.slice(0, S.current.index);
       show(S.current.index);
     }
@@ -139,10 +161,27 @@ export function DrillView({ active }: { active: boolean }) {
     setTurn(null);
   };
 
-  async function recordFirstAttempt(item: Item, correct: boolean, ms: number) {
+  /** Logs every try at a drilled position; the first try in a session also updates its card (recall only). */
+  async function recordAttempt(item: Item, uci: string, j: Judgement, at: number, ms: number) {
     const s = S.current!;
     const { key, fen, color } = item.group;
-    if (s.firstTry.has(key)) {
+    const correct = j.kind !== 'wrong';
+    const firstTry = !s.firstTry.has(key);
+    void logAttempt({
+      id: newId(),
+      profileId: s.log.profileId,
+      sessionId: s.log.id,
+      key,
+      mode: s.mode,
+      at,
+      ms,
+      uci,
+      kind: j.kind,
+      loss: j.loss,
+      firstTry,
+      ...(firstTry && s.mode === 'recall' ? { rating: gradeFor(correct, ms) } : {}),
+    });
+    if (!firstTry) {
       if (!correct && s.mode === 'recall') s.items.push(item);
       return;
     }
@@ -165,7 +204,8 @@ export function DrillView({ active }: { active: boolean }) {
     if (!mv) return setTurn({ ...t });
     const item = s.items[s.index];
     const label = moveLabel(t.fen);
-    const ms = Date.now() - t.shownAt;
+    const at = Date.now();
+    const ms = at - t.shownAt;
     setTurn({ ...t, phase: 'thinking', fen: mv.after, lastMove: mv.lan, shapes: [] });
 
     const first = t.step === 0;
@@ -173,7 +213,7 @@ export function DrillView({ active }: { active: boolean }) {
     // The drilled move must be (nearly) the best; later moves in the line only need to avoid real mistakes.
     const j = await judge(t.fen, mv.lan, first ? item.group.best : null, first ? altToleranceCp : thresholdCp);
     if (token.current !== my) return;
-    if (first) await recordFirstAttempt(item, j.kind !== 'wrong', ms);
+    if (first) await recordAttempt(item, mv.lan, j, at, ms);
     if (token.current !== my) return;
 
     if (j.kind === 'wrong') {
@@ -218,7 +258,7 @@ export function DrillView({ active }: { active: boolean }) {
     if (active && drillRequest.value) {
       const groups = drillRequest.value;
       drillRequest.value = null;
-      begin('practice', groups.map((group) => ({ group, isNew: false })));
+      begin('practice', groups.map((group) => ({ group, isNew: false })), 'picked');
     }
   }, [active, drillRequest.value]);
 
@@ -293,7 +333,7 @@ export function DrillView({ active }: { active: boolean }) {
                 Each position is graded on your first try and scheduled with FSRS; misses come back before the session ends.
               </p>
               {queue.length === 0 && nextDue && <p class="muted">Nothing due. Next review {day(nextDue.card.due.getTime())}.</p>}
-              <button class="primary" disabled={!queue.length} onClick={() => begin('recall', queue)}>
+              <button class="primary" disabled={!queue.length} onClick={() => begin('recall', queue, kind)}>
                 Start recall ({queue.length})
               </button>
             </div>
@@ -311,7 +351,7 @@ export function DrillView({ active }: { active: boolean }) {
                 <input type="checkbox" checked={speedLine} onChange={() => (setSpeedLine(!speedLine), writePref('speedLine', !speedLine))} />
                 Play on after a right answer
               </label>
-              <button class="primary" onClick={() => begin('speed', (shuffleOn ? shuffle(set) : set).map((group) => ({ group, isNew: false })))}>
+              <button class="primary" onClick={() => begin('speed', (shuffleOn ? shuffle(set) : set).map((group) => ({ group, isNew: false })), kind, shuffleOn)}>
                 Run all {set.length}
               </button>
             </div>
@@ -348,11 +388,11 @@ export function DrillView({ active }: { active: boolean }) {
         <div class="actions">
           {s.mode === 'speed' && (
             <>
-              <button class="primary" onClick={() => begin('speed', (shuffleOn ? shuffle(set) : set).map((group) => ({ group, isNew: false })))}>
+              <button class="primary" onClick={() => begin('speed', (shuffleOn ? shuffle(set) : set).map((group) => ({ group, isNew: false })), kind, shuffleOn)}>
                 Run the whole set again
               </button>
-              {misses.length > 0 && <button onClick={() => begin('speed', shuffleOn ? shuffle(misses) : misses)}>Run the misses</button>}
-              {queue.length > 0 && <button onClick={() => begin('recall', queue)}>Recall pass ({queue.length})</button>}
+              {misses.length > 0 && <button onClick={() => begin('speed', shuffleOn ? shuffle(misses) : misses, 'misses', shuffleOn)}>Run the misses</button>}
+              {queue.length > 0 && <button onClick={() => begin('recall', queue, kind)}>Recall pass ({queue.length})</button>}
             </>
           )}
           <button onClick={close}>Back</button>

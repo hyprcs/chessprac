@@ -53,6 +53,17 @@ export function formatLine(sans: string[], startPly = 0): string {
     .join(' ');
 }
 
+/** The FEN after playing a UCI move, or null if it isn't legal here. */
+export function playUci(fen: string, uci: string): string | null {
+  try {
+    const chess = new Chess(fen);
+    chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+    return chess.fen();
+  } catch {
+    return null;
+  }
+}
+
 export function uciToSan(fen: string, uci: string): string | null {
   try {
     const chess = new Chess(fen);

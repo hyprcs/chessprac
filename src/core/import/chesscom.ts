@@ -3,7 +3,7 @@ import { parseChesscomTimeControl, speedOf } from '../timecontrol';
 import { positionKey, replay, START_FEN } from '../position';
 import { classifyOpening } from '../openings';
 import { getWithBackoff } from './http';
-import { pgnHeaders, pgnMoves } from './pgn';
+import { pgnHeaders, pgnMainline } from './pgn';
 import type { Importer, SkipReason } from './common';
 
 const API = 'https://api.chess.com/pub/player';
@@ -26,6 +26,8 @@ export interface CcGame {
   eco?: string;
   white: CcPlayer;
   black: CcPlayer;
+  /** Only on games chess.com has reviewed. */
+  accuracies?: { white?: number; black?: number };
 }
 
 /** "https://api.chess.com/pub/player/x/games/2026/09" -> "2026/09" */
@@ -91,9 +93,10 @@ export function normaliseChesscom(g: CcGame, account: string): GameRecord | Skip
   const tc = parseChesscomTimeControl(g.time_control);
   if (!tc) return 'unreadable';
 
+  const line = pgnMainline(g.pgn);
   let moves: string[];
   try {
-    moves = replay(pgnMoves(g.pgn)).map((p) => p.san);
+    moves = replay(line.moves).map((p) => p.san);
   } catch {
     return 'unreadable';
   }
@@ -104,7 +107,7 @@ export function normaliseChesscom(g: CcGame, account: string): GameRecord | Skip
   const opp = isWhite ? g.black : g.white;
   // URL path is ".../game/live/123" or ".../game/daily/123"; the live and daily id spaces are separate.
   const siteId = g.url.split('/game/')[1] ?? g.url;
-  return {
+  const game: GameRecord = {
     id: `chesscom:${siteId}`,
     site: 'chesscom',
     siteId,
@@ -124,4 +127,9 @@ export function normaliseChesscom(g: CcGame, account: string): GameRecord | Skip
     siteOpening: siteOpeningLabel(headers.ECOUrl ?? g.eco),
     moves,
   };
+  if (line.clocks.some((c) => c !== null)) game.clocks = line.clocks;
+  const acc = g.accuracies;
+  if (acc && (acc.white != null || acc.black != null))
+    game.accuracy = { mine: (isWhite ? acc.white : acc.black) ?? null, opp: (isWhite ? acc.black : acc.white) ?? null };
+  return game;
 }
