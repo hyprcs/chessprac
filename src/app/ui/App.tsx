@@ -6,6 +6,7 @@ import { OpeningsView } from './OpeningsView';
 import { DrillView } from './DrillView';
 import { ImportButton, LinkAccountForm, ProfileView } from './ProfileView';
 import { go, tab, type Tab } from './drill-request';
+import { insightShown } from '../insight';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'mistakes', label: 'Mistakes' },
@@ -25,6 +26,11 @@ export function App() {
       <header class="top">
         <h1>chessprac</h1>
         <ProfileSwitcher />
+        {insightShown.value && !insightShown.value.seenAt && t !== 'mistakes' && (
+          <button class="pill" onClick={() => go('mistakes')}>
+            New insight
+          </button>
+        )}
         <nav class="tabs">
           {TABS.map((x) => (
             <button class={t === x.id ? 'tab on' : 'tab'} aria-current={t === x.id ? 'page' : undefined} onClick={() => go(x.id)}>

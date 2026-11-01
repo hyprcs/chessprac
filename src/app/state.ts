@@ -8,6 +8,7 @@ import { addGameReplies, type ReplyIndex } from '../core/replies';
 import { PROFILE_FORMAT, PROFILE_VERSION, parseProfileFile, type ProfileFile } from '../core/profile-file';
 import { reviveDrillCard, type DrillCard } from '../core/srs';
 import type { DrillAttempt, DrillSession } from '../core/drill-log';
+import type { InsightState } from '../core/insights';
 import * as store from './db';
 
 export const profiles = signal<Profile[]>([]);
@@ -127,6 +128,11 @@ export async function renameProfile(name: string): Promise<void> {
 export async function updateSettings(patch: Partial<Settings>): Promise<void> {
   const p = profile.value;
   if (p) await saveProfile({ ...p, settings: { ...p.settings, ...patch } });
+}
+
+export async function saveInsights(insights: InsightState): Promise<void> {
+  const p = profile.value;
+  if (p) await saveProfile({ ...p, insights });
 }
 
 export async function removeProfile(): Promise<void> {

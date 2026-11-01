@@ -17,10 +17,10 @@ export function go(t: Tab) {
   history.replaceState(null, '', `#${t}`);
 }
 
-/** Positions the "Drill this" buttons hand to the drill tab. */
-export const drillRequest = signal<MistakeGroup[] | null>(null);
+/** Positions the "Drill this" buttons hand to the drill tab, and how to drill them. */
+export const drillRequest = signal<{ groups: MistakeGroup[]; mode: 'practice' | 'speed' } | null>(null);
 
-export function practise(groups: MistakeGroup[]) {
-  drillRequest.value = groups;
+export function practise(groups: MistakeGroup[], mode: 'practice' | 'speed' = 'practice') {
+  drillRequest.value = { groups, mode };
   go('drill');
 }

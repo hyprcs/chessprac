@@ -8,15 +8,16 @@ A static site (Vite + TypeScript + Preact). Everything runs in your browser: gam
 
 1. **Create a profile and link an account.** Use chess.com or Lichess, and choose how far back to import. Link the other site, or more accounts, later; their games merge into the same profile.
 2. **Analysis runs in the background.** A progress bar shows how far it has got. Every position where you were to move in the first 20 moves is scored, and a move is flagged when it loses more than 0.8 pawns against the best move (adjustable). It saves as it goes, so closing the tab only pauses it. Games Lichess has already analysed reuse Lichess's evals. For each flagged move it then searches the position after it for two lines: the opponent's best line (how the move is punished) and the runner-up reply (whether that punishment was the only good move). Imports keep each move's clock time and the site's accuracy score where it has one; accounts imported before this was added are fetched again once on the next sync.
-3. **Mistakes.** Positions are grouped by FEN, so the same error on either site, or after a different move order, counts once. They're ranked by times wrong × average loss. Filter by site, colour and time control.
-4. **Openings.** Your score per opening and variation, named the same way for both sites.
-5. **Drill.**
+3. **Your key insight.** Once the first analysis finishes, the top of the Mistakes tab shows one finding about your play, with the evidence, a chart and what to do about it. It stays put for 30 days or 150 games played, whichever comes first, then makes way for the next one and reports how the last one held up in the games since. See *How it works* for how it's chosen.
+4. **Mistakes.** Positions are grouped by FEN, so the same error on either site, or after a different move order, counts once. They're ranked by times wrong × average loss. Filter by site, colour and time control.
+5. **Openings.** Your score per opening and variation, named the same way for both sites.
+6. **Drill.**
    - *Recall pass:* today's FSRS queue, graded on your first try.
    - *Speed run:* the whole set, as fast as you can. It doesn't touch the schedule.
    - *After a right answer:* the drill plays the reply your opponents most often chose (falling back to the engine) and continues for a few moves.
    - *After a wrong answer:* it shows the best move, the eval drop, and links to the games where you went wrong.
    - Every try in every mode is logged with its move and answer time, along with each session, so speed-run cycles and review history can be studied later.
-6. **Export your profile** from the Profile tab now and then. If browser data is cleared, importing the file restores everything, drill history included.
+7. **Export your profile** from the Profile tab now and then. If browser data is cleared, importing the file restores everything, drill history included.
 
 ## Development
 
@@ -56,6 +57,15 @@ It writes `.cache/<profile>.json` in the app's export format (use **Import profi
 - **Speed.** Every game is bucketed by base + 40 × increment (bullet < 3 min, blitz < 8, rapid < 25, then classical), not by the site's label. Ratings are shown per site and never combined.
 - **Openings.** Both sites' games are classified from their moves with the [Lichess opening book](https://github.com/lichess-org/chess-openings) (CC0).
 - **Analysis.** Stockfish 19 lite (WASM, single-threaded) evaluates the positions before and after each of your moves. Loss = eval before − eval after, from your side, capped at ±10 pawns.
+- **Key insight.** Each candidate finding compares you with something fair. Usually that's your opponents in the same games, who are rated about the same as you, so they make a ready-made peer group. Otherwise it's your own results from the same positions. Evals become expected score with Lichess's win-chance curve, and moves are compared in pairs (your move *n* and theirs), so stretches of moves add up exactly. The candidates are:
+  - which stretch of moves loses you ground;
+  - the clock gap at move 20, compared within bands of the same evaluation;
+  - pieces left to a capture, against your opponents' rate;
+  - a position you keep getting wrong;
+  - openings that score below what the ratings predict;
+  - games started straight after a loss.
+
+  Every finding is costed in score lost per 100 games (≈ rating points near 50%). Only findings whose 95% range excludes zero are shown, and the strongest topic not shown in the last two rotations wins.
 
 ## Browser access
 

@@ -8,6 +8,7 @@ import { FilterBar } from './Filters';
 import { MiniBoard, arrow } from './Board';
 import { SITE_NAMES, gameLabel, pawns, plural } from './format';
 import { practise } from './drill-request';
+import { InsightCard } from './InsightCard';
 
 const PAGE = 20;
 
@@ -44,6 +45,7 @@ export function MistakesView() {
 
   return (
     <section>
+      <InsightCard />
       <FilterBar />
       <div class="toolbar">
         <ThresholdControl />

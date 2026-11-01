@@ -253,12 +253,12 @@ export function DrillView({ active }: { active: boolean }) {
     });
   }
 
-  // "Drill this" from the mistakes list.
+  // "Drill this" from the mistakes list or the key insight.
   useEffect(() => {
     if (active && drillRequest.value) {
-      const groups = drillRequest.value;
+      const { groups, mode } = drillRequest.value;
       drillRequest.value = null;
-      begin('practice', groups.map((group) => ({ group, isNew: false })), 'picked');
+      begin(mode, groups.map((group) => ({ group, isNew: false })), 'picked');
     }
   }, [active, drillRequest.value]);
 

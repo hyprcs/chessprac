@@ -1,3 +1,5 @@
+import type { InsightState } from './insights';
+
 export type Site = 'chesscom' | 'lichess';
 export type Color = 'white' | 'black';
 export type Speed = 'bullet' | 'blitz' | 'rapid' | 'classical' | 'correspondence';
@@ -105,6 +107,8 @@ export interface Profile {
   accounts: Account[];
   settings: Settings;
   createdAt: number;
+  /** The key insight being shown, and the topics shown before it. */
+  insights?: InsightState;
 }
 
 /** An engine evaluation of a position, side-to-move POV, clamped to ±MATE_CP. */

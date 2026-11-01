@@ -535,6 +535,179 @@ kbd {
   width: 90px;
 }
 
+/* Key insight */
+.pill {
+  padding: 2px 10px;
+  border-radius: 999px;
+  border-color: var(--accent);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.insight {
+  margin: 4px 0 16px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+}
+.insight.new {
+  box-shadow: 0 1px 8px rgb(0 0 0 / 0.08);
+}
+.insight.pending {
+  border-left-color: var(--border);
+}
+.insight.pending p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.insight-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 12px;
+  font-size: 0.85rem;
+}
+.eyebrow {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.insight h2 {
+  margin: 4px 0 8px;
+  font-size: 1.25rem;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+.insight-main {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.insight-body {
+  min-width: 0;
+  flex: 1;
+  max-width: 68ch;
+}
+.insight-body p {
+  margin: 0 0 8px;
+}
+.advice {
+  padding: 8px 10px;
+  background: var(--chip);
+  border-radius: 6px;
+}
+.follow-up {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.chart {
+  margin: 10px 0 12px;
+}
+.chart figcaption {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.chart-rows {
+  display: grid;
+  gap: 4px;
+}
+.chart-row {
+  display: grid;
+  grid-template-columns: 6.5em minmax(0, 1fr) 3.5em;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.85rem;
+}
+.chart-row.paired {
+  grid-template-columns: 5em minmax(0, 1fr);
+}
+.chart-row.on .chart-label,
+.chart-row.on .chart-value {
+  font-weight: 600;
+}
+.chart-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.diverge {
+  position: relative;
+  height: 14px;
+  background: linear-gradient(var(--border), var(--border)) center / 1px 100% no-repeat;
+}
+.diverge .bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.bar.pos {
+  background: var(--good);
+  border-radius: 0 3px 3px 0;
+}
+.bar.neg {
+  background: var(--bad);
+  border-radius: 3px 0 0 3px;
+}
+.chart-row:not(.on) .diverge .bar {
+  opacity: 0.55;
+}
+.pair {
+  display: grid;
+  gap: 2px;
+}
+.track {
+  position: relative;
+  height: 16px;
+  background: var(--chip);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.track .bar {
+  display: block;
+  height: 100%;
+}
+.bar.a,
+.swatch.a {
+  background: var(--bad);
+}
+.bar.b,
+.swatch.b {
+  background: var(--accent);
+}
+/* Light enough for the value printed over it to stay readable in both themes. */
+.track .bar {
+  opacity: 0.45;
+}
+.pair-value {
+  position: absolute;
+  left: 6px;
+  top: 0;
+  line-height: 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+}
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
 .welcome {
   max-width: 560px;
   margin: 12vh auto 0;
@@ -564,7 +737,8 @@ footer {
     margin-left: 0;
     width: 100%;
   }
-  .mistake {
+  .mistake,
+  .insight-main {
     flex-direction: column;
   }
   .board-small {
